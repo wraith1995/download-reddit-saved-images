@@ -348,5 +348,5 @@ if len(ERRORS) > 0:
     with open(SAVE_DIR + "errors", 'w+') as f:
         for err in ERRORS:
             print(err)
-            f.write(err + "\n")
+            f.write(err + b"\n")
     print("Perhaps you should check if the images still exist.")
