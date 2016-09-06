@@ -11,7 +11,7 @@ from PIL import Image
 import praw
 import mimetypes
 import html5lib
-
+import itertools
 try:
     from io import BytesIO
 except ImportError:
@@ -35,7 +35,6 @@ CONFIG_DATA = yaml.safe_load(CONFIG)
 USERNAME = CONFIG_DATA['username']
 PASSWORD = CONFIG_DATA['password']
 SAVE_DIR = CONFIG_DATA['save_dir']
-UNSAVE = CONFIG_DATA['unsave']
 ALBUM_PATH = os.path.join(SAVE_DIR, 'albums')
 # to notify ERRORS
 ERRORS = []
@@ -60,8 +59,23 @@ class Downloader(object):
                                  str(submission.title.encode('utf-8')[0:20])
                                  .replace("/", "")
                                  .replace("\\", "")).replace('"', "")
+        
         self.album_path = os.path.join(self.path, 'albums')
         print("Downloading --> {0}".format(submission.title.encode('utf-8')))
+
+    def get_comments(self):
+        comment_string = ""
+        comment_obejcts = self.submission.comments
+        def comment_object_reader(obj,n):
+            delim = "\n" + "".join(list(itertools.repeat("#",n*2))) + "\n"
+            try:
+                return(delim + obj.body + "".join(map(lambda x: comment_object_reader(x,n+1), obj.replies)) + delim)
+            except:
+                return("")
+        comment_string = "".join(map(lambda x: comment_object_reader(x,1),comment_obejcts))
+        return(comment_string)
+    def get_post(self):
+        return("\n" + self.submission.selftext + "\n")
 
     def is_image_link(self, sub):
         """
@@ -80,7 +94,8 @@ class Downloader(object):
         param: is_file: Used to determine if its a full name
         (/Users/test.txt) or a pattern (/Pics/myphoto*)
         """
-        return os.path.isfile(path) if is_file else len(glob(path + '*')) >= 1
+        return(False)
+        #return os.path.isfile(path) if is_file else len(glob(path + '*')) >= 1
 
     def download_and_save(self, url, custom_path=None):
         """
@@ -113,7 +128,7 @@ class Downloader(object):
         try:
             self.download_and_save(self.submission.url)
         except Exception as ex:
-            ERRORS.append(self.submission.title.encode('utf-8'))
+            ERRORS.append((self.submission.title.encode('utf-8') + b":" + (self.submission.url.encode('utf-8'))))
             print(ex)
 
     def imgur_album(self):
@@ -144,7 +159,8 @@ class Downloader(object):
             try:
                 os.remove(path + '.zip')
             except OSError as ex:
-                ERRORS.append(self.submission.title.encode('utf-8'))
+                ERRORS.append((self.submission.title.encode('utf-8') + b":" + (self.submission.url.encode('utf-8'))))
+
                 print(ex)
             #print("Exception: {0}".format(str(ex)))
             print("Album is too big, downloading images...")
@@ -162,7 +178,7 @@ class Downloader(object):
                 imgs_elements = container_element.findAll("a",
                                                           {"class": "zoom"})
             except Exception:
-                ERRORS.append(self.submission.title.encode('utf-8'))
+                ERRORS.append((self.submission.title.encode('utf-8') + b":" + (self.submission.url.encode('utf-8'))))
                 return 1
             counter = 0
             for img in imgs_elements:
@@ -176,7 +192,7 @@ class Downloader(object):
                     self.download_and_save(img_url, custom_path=path +
                                            "/" + str(counter))
                 except Exception as ex:
-                    ERRORS.append(self.submission.title.encode('utf-8'))
+                    ERRORS.append((self.submission.title.encode('utf-8') + b":" + (self.submission.url.encode('utf-8'))))
                     print("Exception: {0}".format(str(ex)))
                 counter += 1
 
@@ -191,7 +207,7 @@ class Downloader(object):
         try:
             self.download_and_save(new_url)
         except Exception as ex:
-            ERRORS.append(self.submission.title.encode('utf-8'))
+            ERRORS.append((self.submission.title.encode('utf-8') + b":" + (self.submission.url.encode('utf-8'))))
             print(ex)
 
     def tumblr_link(self):
@@ -212,7 +228,7 @@ class Downloader(object):
                 try:
                     self.download_and_save(img_url)
                 except Exception as ex:
-                    ERRORS.append(self.submission.title.encode('utf-8'))
+                    ERRORS.append((self.submission.title.encode('utf-8') + b":" + (self.submission.url.encode('utf-8'))))
                     print(ex)
 
     def flickr_link(self):
@@ -227,7 +243,7 @@ class Downloader(object):
         try:
             self.download_and_save(img_url)
         except Exception as ex:
-            ERRORS.append(self.submission.title.encode('utf-8'))
+            ERRORS.append((self.submission.title.encode('utf-8') + b":" + (self.submission.url.encode('utf-8'))))
             print(ex)
 
     def picsarus_link(self):
@@ -237,7 +253,7 @@ class Downloader(object):
         try:
             self.download_and_save(self.submission.url + ".jpg")
         except Exception as ex:
-            ERRORS.append(self.submission.title.encode('utf-8'))
+            ERRORS.append((self.submission.title.encode('utf-8') + b":" + (self.submission.url.encode('utf-8'))))
             print(ex)
 
     def picasaurus_link(self):
@@ -252,7 +268,7 @@ class Downloader(object):
             self.download_and_save(img_url)
             CORRECT_SUBMISSIONS.append(self.submission)
         except Exception as ex:
-            ERRORS.append(self.submission.title.encode('utf-8'))
+            ERRORS.append((self.submission.title.encode('utf-8') + b":" + (self.submission.url.encode('utf-8'))))
             print(ex)
     
     def gfycat_link(self):
@@ -262,10 +278,11 @@ class Downloader(object):
         try:
             response = requests.get(self.submission.url)
             soup = bs(response.content, 'html5lib')
-            url = soup.find(id="webmsource").attrs['src']
-            self.download_and_save('http:'+url)
+            url = soup.find(id="webmSource").attrs['src']
+            self.download_and_save(url)
         except Exception as ex:
-            ERRORS.append(self.submission.title.encode('utf-8'))
+            ERRORS.append((self.submission.title.encode('utf-8') + b":" + (self.submission.url.encode('utf-8'))))
+
             print(ex)
 
     def choose_download_method(self):
@@ -278,7 +295,7 @@ class Downloader(object):
             # not direct, read domain
             if 'imgur' in self.submission.domain:
                 # check if album
-                if '/a/' in self.submission.url:
+                if '/a/' in self.submission.url: #not a reliable test? Maybe..
                     self.imgur_album()
                 else:
                     self.imgur_link()
@@ -293,7 +310,10 @@ class Downloader(object):
             elif 'gfycat' in self.submission.domain:
                 self.gfycat_link()
             else:
-                print("%s ->> Domain not supported" % (self.submission.domain))
+                ERRORS.append((self.submission.title.encode('utf-8') + b":" + (self.submission.url.encode('utf-8'))))
+                print("%s ->> Domain not supported" % (self.submission.domain)) #add to errors
+        with open(self.path + '.post','w+') as f:
+            f.write("text of post:" + self.get_post() + self.get_comments())
 
 R = praw.Reddit("aesptux\'s saved images downloader")
 
@@ -311,7 +331,7 @@ if not os.path.exists(os.path.join(SAVE_DIR, 'albums')):
     os.mkdir(ALBUM_PATH)
 
 for link in SAVED_LINKS:
-    if not hasattr(link, 'url'):
+    if not hasattr(link, 'url'): #see what this does? 
         continue
     # delete trailing slash
     if link.url.endswith('/'):
@@ -322,15 +342,11 @@ for link in SAVED_LINKS:
 
 print("Done.")
 
-# unsave items
-if UNSAVE:
-    for c_submission in CORRECT_SUBMISSIONS:
-        print("Unsaving %s" % (c_submission.title.encode('utf-8')))
-        c_submission.unsave()
-        time.sleep(2)  # reddit's api restriction
 
 if len(ERRORS) > 0:
     print("The following items have failed:")
-    for err in ERRORS:
-        print(err)
+    with open(SAVE_DIR + "errors", 'w+') as f:
+        for err in ERRORS:
+            print(err)
+            f.write(err + "\n")
     print("Perhaps you should check if the images still exist.")
